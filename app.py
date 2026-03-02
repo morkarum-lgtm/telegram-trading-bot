@@ -1,61 +1,28 @@
-//@version=5
-indicator("INSTITUTIONAL SCORE MODEL", overlay=true)
+from flask import Flask, request
+import requests
+import os
+import threading
 
-// === 15m Trend ===
-ema50_15 = request.security(syminfo.tickerid, "15", ta.ema(close, 50))
-ema200_15 = request.security(syminfo.tickerid, "15", ta.ema(close, 200))
+TOKEN = os.environ.get("TOKEN")
+CHAT_ID = os.environ.get("CHAT_ID")
 
-bullTrend = ema50_15 > ema200_15
-bearTrend = ema50_15 < ema200_15
+app = Flask(__name__)
 
-// === 5m Indicators ===
-rsi = ta.rsi(close, 14)
-adx = ta.adx(14)
-atr = ta.atr(14)
-atr_ma = ta.sma(atr, 14)
-vol_ma = ta.sma(volume, 20)
+def send_to_telegram(message):
+    requests.get(
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+        params={"chat_id": CHAT_ID, "text": message}
+    )
 
-highestHigh = ta.highest(high, 5)
-lowestLow = ta.lowest(low, 5)
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    message = request.data.decode("utf-8")
+    text = f"📊 Signal:\n{message}"
 
-breakUp = close > highestHigh[1]
-breakDown = close < lowestLow[1]
+    threading.Thread(target=send_to_telegram, args=(text,)).start()
 
-// === SCORE CALCULATION ===
-callScore = 0.0
-putScore = 0.0
+    return "ok", 200
 
-// Trend
-callScore += bullTrend ? 20 : 0
-putScore += bearTrend ? 20 : 0
-
-// Breakout
-callScore += breakUp ? 20 : 0
-putScore += breakDown ? 20 : 0
-
-// ADX
-callScore += adx > 25 ? 15 : 0
-putScore += adx > 25 ? 15 : 0
-
-// Volume
-callScore += volume > vol_ma ? 15 : 0
-putScore += volume > vol_ma ? 15 : 0
-
-// ATR Expansion
-callScore += atr > atr_ma ? 15 : 0
-putScore += atr > atr_ma ? 15 : 0
-
-// RSI Zone
-callScore += (rsi > 50 and rsi < 65) ? 15 : 0
-putScore += (rsi < 50 and rsi > 35) ? 15 : 0
-
-// === FINAL SIGNAL (≥ 80)
-callSignal = callScore >= 80 and not (callScore[1] >= 80)
-putSignal = putScore >= 80 and not (putScore[1] >= 80)
-
-// === Alerts
-alertcondition(callSignal, title="CALL", message="CALL")
-alertcondition(putSignal, title="PUT", message="PUT")
-
-plotshape(callSignal, style=shape.labelup, location=location.belowbar, color=color.green, text="CALL")
-plotshape(putSignal, style=shape.labeldown, location=location.abovebar, color=color.red, text="PUT")
+@app.route('/')
+def home():
+    return "Bot is running!"
