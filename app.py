@@ -9,8 +9,7 @@ app = Flask(__name__)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    data = request.json
-    message = data.get('message', 'No message')
+    message = request.data.decode("utf-8")
     
     text = f"📊 Signal:\n{message}"
     
