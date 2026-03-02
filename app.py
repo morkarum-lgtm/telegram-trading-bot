@@ -1,31 +1,27 @@
-from flask import Flask, request
-import requests
-import os
-import threading
+//@version=5
+indicator("Telegram Signal Bot ELITE", overlay=true)
 
-TOKEN = os.environ.get("TOKEN")
-CHAT_ID = os.environ.get("CHAT_ID")
+ema50 = ta.ema(close, 50)
+ema200 = ta.ema(close, 200)
+rsi = ta.rsi(close, 14)
+adx = ta.adx(14)
 
-app = Flask(__name__)
+highestHigh = ta.highest(high, 5)
+lowestLow = ta.lowest(low, 5)
 
-def send_to_telegram(message):
-    requests.get(
-        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-        params={"chat_id": CHAT_ID, "text": message}
-    )
+bullTrend = ema50 > ema200
+bearTrend = ema50 < ema200
 
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    message = request.data.decode("utf-8")
+strongTrend = adx > 25
 
-    text = f"📊 Signal:\n{message}"
+breakUp = close > highestHigh[1]
+breakDown = close < lowestLow[1]
 
-    # Send telegram in background
-    threading.Thread(target=send_to_telegram, args=(text,)).start()
+callSignal = bullTrend and strongTrend and breakUp and rsi > 60
+putSignal = bearTrend and strongTrend and breakDown and rsi < 40
 
-    # Respond immediately to TradingView
-    return "ok", 200
+alertcondition(callSignal, title="CALL", message="CALL")
+alertcondition(putSignal, title="PUT", message="PUT")
 
-@app.route('/')
-def home():
-    return "Bot is running!"
+plotshape(callSignal, style=shape.labelup, location=location.belowbar, color=color.green, text="CALL")
+plotshape(putSignal, style=shape.labeldown, location=location.abovebar, color=color.red, text="PUT")
